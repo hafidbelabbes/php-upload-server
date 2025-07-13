@@ -1,9 +1,5 @@
 services:
   - type: web
     name: php-upload-server
-    env: php
+    env: docker
     plan: free
-    buildCommand: ""
-    startCommand: ""
-    staticPublishPath: public
-    autoDeploy: true

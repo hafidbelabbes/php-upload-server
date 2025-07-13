@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: php-upload-server
+    env: php
+    buildCommand: ""
+    startCommand: ""
+    staticPublishPath: public

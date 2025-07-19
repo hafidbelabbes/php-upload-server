@@ -25,7 +25,7 @@ if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
 
     if (move_uploaded_file($tempName, $targetPath)) {
         // ✅ Return JSON response
-        echo json_encode(['url' => "https://php-upload-server-1.onrender.com . $targetPath]);
+        echo json_encode(['url' => "https://php-upload-server.onrender.com". $targetPath]);
     } else {
         http_response_code(500);
         echo json_encode(['error' => 'Failed to move uploaded file.']);

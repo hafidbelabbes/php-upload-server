@@ -1,39 +1,66 @@
 <?php
-header('Content-Type: application/json');
+// ضفنا الـ "هيدرز" تبعت الـ CORS عشان الـ Flutter app يقدر يوصل
+header("Access-Control-Allow-Origin: *"); // خلي الـ "ريكويستات" من أي مكان (عشان الـ "ديفلوبمنت")
+header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
-$uploadDir = 'uploads/'; // مجلد لحفظ الصور، تأكد أنه قابل للكتابة (chmod 777 أو 755)
-
-if (!file_exists($uploadDir)) {
-    mkdir($uploadDir, 0777, true);
+// تعامل مع الـ "ريكويست" اللي من نوع OPTIONS (الـ "بريفلايت ريكويست")
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
 }
 
+// ضيف الـ "كونتنت تايب" للـ "ريسبونس"
+header('Content-Type: application/json'); // ✅ رح نرجع JSON
+
+$response = []; // بلّش الـ "اري" تبعت الـ "ريسبونس"
+
+$uploadDir = 'uploads/'; // المجلد الأساسي لـ "الأبلودات" (نسبة لمكان الـ "سكريبت")
+$baseUrl = 'https://php-upload-server-1.onrender.com/'; // ✅ مهم جداً: الـ URL تبع الـ "سيرفس" تبعتك على Render.com
+
+// جيب اسم الـ "فولدر" من الـ POST "ديتا"، أو خليه 'misc' إذا ما انبعت
+$folderName = isset($_POST['folder']) && !empty($_POST['folder']) ? preg_replace('/[^a-zA-Z0-9_\-]/', '', $_POST['folder']) : 'misc';
+$targetDir = $uploadDir . $folderName . '/';
+
+// اعمل الـ "فولدر" المستهدف إذا مش موجود
+if (!is_dir($targetDir)) {
+    if (!mkdir($targetDir, 0777, true)) { // 0777 بتعطي صلاحيات كاملة، ممكن تحتاج تعديل للـ "برودكشن"
+        $response['status'] = 'error';
+        $response['message'] = 'Failed to create upload directory.';
+        echo json_encode($response);
+        exit();
+    }
+}
+
+// اتأكد إذا فيه ملف انعمله "أبلود"
 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
     $fileTmpPath = $_FILES['image']['tmp_name'];
-    $fileName = basename($_FILES['image']['name']);
-    $fileSize = $_FILES['image']['size'];
-    $fileType = $_FILES['image']['type'];
-    $fileNameCmps = explode(".", $fileName);
-    $fileExtension = strtolower(end($fileNameCmps));
-    $newFileName = md5(time() . $fileName) . '.' . $fileExtension; // اسم فريد للملف
+    $fileName = $_FILES['image']['name'];
+    $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
 
-    $destPath = $uploadDir . $newFileName;
+    // اعمل اسم ملف فريد
+    $newFileName = uniqid() . '_' . time() . '.' . $fileExtension;
+    $destPath = $targetDir . $newFileName;
 
-    // أنواع الملفات المسموح بها (تحقق أمني مهم)
-    $allowedfileExtensions = array('jpg', 'gif', 'png', 'jpeg');
-
-    if (in_array($fileExtension, $allowedfileExtensions)) {
-        if (move_uploaded_file($fileTmpPath, $destPath)) {
-            // قم بإرجاع الرابط الكامل للصورة
-            // تأكد من أن 'your_domain.com/uploads/' هو المسار الصحيح للوصول إلى المجلد عبر HTTP
-            $imageUrl = 'https://your_domain.com/uploads/' . $newFileName;
-            echo json_encode(['success' => true, 'imageUrl' => $imageUrl]);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'There was an error moving the uploaded file.']);
-        }
+    if (move_uploaded_file($fileTmpPath, $destPath)) {
+        // كوّن الـ URL الكامل
+        $fullUrl = $baseUrl . $destPath; // هاد بيفترض إن الـ 'public' متاح مباشرة عن طريق الـ "ويب سيرفر"
+        
+        $response['status'] = 'success';
+        $response['message'] = 'File uploaded successfully.';
+        $response['url'] = $fullUrl;
     } else {
-        echo json_encode(['success' => false, 'message' => 'Upload failed. Allowed file types: ' . implode(',', $allowedfileExtensions)]);
+        $response['status'] = 'error';
+        $response['message'] = 'Failed to move uploaded file.';
+        $response['upload_error_code'] = $_FILES['image']['error']; // "إيرور" مفصل أكثر
     }
 } else {
-    echo json_encode(['success' => false, 'message' => 'No image uploaded or an upload error occurred.']);
+    $response['status'] = 'error';
+    $response['message'] = 'No file uploaded or an upload error occurred.';
+    if (isset($_FILES['image'])) {
+        $response['upload_error_code'] = $_FILES['image']['error'];
+    }
 }
+
+echo json_encode($response);
 ?>
